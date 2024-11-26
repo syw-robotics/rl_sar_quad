@@ -1,1 +1,1 @@
-MotorCommand[32] motor_command
+MotorCommand[12] motor_command

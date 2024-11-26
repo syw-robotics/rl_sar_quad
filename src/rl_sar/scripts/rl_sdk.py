@@ -19,11 +19,11 @@ class RobotCommand:
 
     class MotorCommand:
         def __init__(self):
-            self.q = [0.0] * 32
-            self.dq = [0.0] * 32
-            self.tau = [0.0] * 32
-            self.kp = [0.0] * 32
-            self.kd = [0.0] * 32
+            self.q = [0.0] * 12
+            self.dq = [0.0] * 12
+            self.tau = [0.0] * 12
+            self.kp = [0.0] * 12
+            self.kd = [0.0] * 12
 
 class RobotState:
     def __init__(self):
@@ -38,11 +38,11 @@ class RobotState:
 
     class MotorState:
         def __init__(self):
-            self.q = [0.0] * 32
-            self.dq = [0.0] * 32
-            self.ddq = [0.0] * 32
-            self.tauEst = [0.0] * 32
-            self.cur = [0.0] * 32
+            self.q = [0.0] * 12
+            self.dq = [0.0] * 12
+            self.ddq = [0.0] * 12
+            self.tauEst = [0.0] * 12
+            self.cur = [0.0] * 12
 
 class STATE(Enum):
     STATE_WAITING = 0
@@ -132,8 +132,8 @@ class RL:
         self.stand_model = None
 
         # output buffer
-        self.output_torques = torch.zeros(1, 32)
-        self.output_dof_pos = torch.zeros(1, 32)
+        self.output_torques = torch.zeros(1, 12)
+        self.output_dof_pos = torch.zeros(1, 12)
 
     def ComputeObservation(self):
         obs_list = []

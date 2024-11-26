@@ -22,11 +22,11 @@ struct RobotCommand
 {
     struct MotorCommand
     {
-        std::vector<T> q = std::vector<T>(32, 0.0);
-        std::vector<T> dq = std::vector<T>(32, 0.0);
-        std::vector<T> tau = std::vector<T>(32, 0.0);
-        std::vector<T> kp = std::vector<T>(32, 0.0);
-        std::vector<T> kd = std::vector<T>(32, 0.0);
+        std::vector<T> q = std::vector<T>(12, 0.0);
+        std::vector<T> dq = std::vector<T>(12, 0.0);
+        std::vector<T> tau = std::vector<T>(12, 0.0);
+        std::vector<T> kp = std::vector<T>(12, 0.0);
+        std::vector<T> kd = std::vector<T>(12, 0.0);
     } motor_command;
 };
 
@@ -42,11 +42,11 @@ struct RobotState
 
     struct MotorState
     {
-        std::vector<T> q = std::vector<T>(32, 0.0);
-        std::vector<T> dq = std::vector<T>(32, 0.0);
-        std::vector<T> ddq = std::vector<T>(32, 0.0);
-        std::vector<T> tauEst = std::vector<T>(32, 0.0);
-        std::vector<T> cur = std::vector<T>(32, 0.0);
+        std::vector<T> q = std::vector<T>(12, 0.0);
+        std::vector<T> dq = std::vector<T>(12, 0.0);
+        std::vector<T> ddq = std::vector<T>(12, 0.0);
+        std::vector<T> tauEst = std::vector<T>(12, 0.0);
+        std::vector<T> cur = std::vector<T>(12, 0.0);
     } motor_state;
 };
 

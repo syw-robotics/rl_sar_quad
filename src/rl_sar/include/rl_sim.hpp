@@ -48,20 +48,23 @@ private:
 
     // ros interface
     std::string ros_namespace;
+
     geometry_msgs::Twist vel;
     geometry_msgs::Pose pose;
-    geometry_msgs::Twist cmd_vel;
+    geometry_msgs::Twist cmd_vel; // Not using cmd_vel to receive velocity commands for now
+
     ros::Subscriber model_state_subscriber;
     ros::Subscriber joint_state_subscriber;
-    ros::Subscriber cmd_vel_subscriber;
+    ros::Subscriber cmd_vel_subscriber; // Not using cmd_vel to receive velocity commands for now
     ros::ServiceClient gazebo_set_model_state_client;
     ros::ServiceClient gazebo_pause_physics_client;
     ros::ServiceClient gazebo_unpause_physics_client;
     std::map<std::string, ros::Publisher> joint_publishers;
     std::vector<robot_msgs::MotorCommand> joint_publishers_commands;
+
     void ModelStatesCallback(const gazebo_msgs::ModelStates::ConstPtr &msg);
     void JointStatesCallback(const sensor_msgs::JointState::ConstPtr &msg);
-    void CmdvelCallback(const geometry_msgs::Twist::ConstPtr &msg);
+    void CmdvelCallback(const geometry_msgs::Twist::ConstPtr &msg); // Not using cmd_vel to receive velocity commands for now
 
     // others
     std::string gazebo_model_name;

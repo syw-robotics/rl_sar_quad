@@ -56,7 +56,7 @@ RL_Sim::RL_Sim()
     }
 
     // subscriber
-    this->cmd_vel_subscriber = nh.subscribe<geometry_msgs::Twist>("/cmd_vel", 10, &RL_Sim::CmdvelCallback, this);
+    // this->cmd_vel_subscriber = nh.subscribe<geometry_msgs::Twist>("/cmd_vel", 10, &RL_Sim::CmdvelCallback, this); // Not using cmd_vel to receive velocity commands for now
     this->model_state_subscriber = nh.subscribe<gazebo_msgs::ModelStates>("/gazebo/model_states", 10, &RL_Sim::ModelStatesCallback, this);
     this->joint_state_subscriber = nh.subscribe<sensor_msgs::JointState>(this->ros_namespace + "joint_states", 10, &RL_Sim::JointStatesCallback, this);
 
@@ -196,10 +196,11 @@ void RL_Sim::ModelStatesCallback(const gazebo_msgs::ModelStates::ConstPtr &msg)
     this->pose = msg->pose[2];
 }
 
-void RL_Sim::CmdvelCallback(const geometry_msgs::Twist::ConstPtr &msg)
-{
-    this->cmd_vel = *msg;
-}
+// Not using cmd_vel to receive velocity commands for now
+// void RL_Sim::CmdvelCallback(const geometry_msgs::Twist::ConstPtr &msg)
+// {
+//     this->cmd_vel = *msg;
+// }
 
 void RL_Sim::MapData(const std::vector<double> &source_data, std::vector<double> &target_data)
 {
@@ -224,7 +225,7 @@ void RL_Sim::RunModel()
     {
         this->obs.lin_vel = torch::tensor({{this->vel.linear.x, this->vel.linear.y, this->vel.linear.z}});
         this->obs.ang_vel = torch::tensor(this->robot_state.imu.gyroscope).unsqueeze(0);
-        // this->obs.commands = torch::tensor({{this->cmd_vel.linear.x, this->cmd_vel.linear.y, this->cmd_vel.angular.z}});
+        // this->obs.commands = torch::tensor({{this->cmd_vel.linear.x, this->cmd_vel.linear.y, this->cmd_vel.angular.z}}); //  Not using cmd_vel to receive velocity commands for now
         this->obs.commands = torch::tensor({{this->control.x, this->control.y, this->control.yaw}});
         this->obs.base_quat = torch::tensor(this->robot_state.imu.quaternion).unsqueeze(0);
         this->obs.dof_pos = torch::tensor(this->robot_state.motor_state.q).narrow(0, 0, this->params.num_of_dofs).unsqueeze(0);

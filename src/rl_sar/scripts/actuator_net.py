@@ -20,7 +20,7 @@ class Config:
         self.batch_size = 128
         self.device = "cuda:0"
         self.in_dim = 6
-        self.units = 32
+        self.units = 12
         self.layers = 2
         self.out_dim = 1
         self.act = "softsign"
