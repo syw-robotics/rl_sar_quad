@@ -1,0 +1,38 @@
+tron1_gazebo:
+    # Publish all joint states -----------------------------------
+    joint_state_controller:
+        type: joint_state_controller/JointStateController
+        publish_rate: 1000  
+
+    # Left Leg Controllers ---------------------------------------
+    ABAD_L_controller:
+        type: robot_joint_controller/RobotJointController
+        joint: abad_L_joint
+        pid: {p: 100.0, i: 0.0, d: 5.0}
+
+    HIP_L_controller:
+        type: robot_joint_controller/RobotJointController
+        joint: hip_L_joint
+        pid: {p: 300.0, i: 0.0, d: 8.0}
+
+    KNEE_L_controller:
+        type: robot_joint_controller/RobotJointController
+        joint: knee_L_joint
+        pid: {p: 300.0, i: 0.0, d: 8.0}
+
+    # Right Leg Controllers ---------------------------------------
+    ABAD_R_controller:
+        type: robot_joint_controller/RobotJointController
+        joint: abad_R_joint
+        pid: {p: 100.0, i: 0.0, d: 5.0}
+
+    HIP_R_controller:
+        type: robot_joint_controller/RobotJointController
+        joint: hip_R_joint
+        pid: {p: 300.0, i: 0.0, d: 8.0}
+
+    KNEE_R_controller:
+        type: robot_joint_controller/RobotJointController
+        joint: knee_R_joint
+        pid: {p: 300.0, i: 0.0, d: 8.0}
+
