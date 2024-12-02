@@ -46,12 +46,12 @@ link_directories(library/unitree_legged_sdk_3.2/lib)
 set(UNITREE_A1_LIBS -pthread unitree_legged_sdk_amd64 lcm)
 
 # Unitree Go2
-include_directories(library/unitree_sdk2/include)
-link_directories(library/unitree_sdk2/lib/x86_64)
-include_directories(library/unitree_sdk2/thirdparty/include)
-include_directories(library/unitree_sdk2/thirdparty/include/ddscxx)
-link_directories(library/unitree_sdk2/thirdparty/lib/x86_64)
-set(UNITREE_GO2_LIBS -pthread unitree_sdk2 ddsc ddscxx)
+# include_directories(library/unitree_sdk2/include)
+# link_directories(library/unitree_sdk2/lib/x86_64)
+# include_directories(library/unitree_sdk2/thirdparty/include)
+# include_directories(library/unitree_sdk2/thirdparty/include/ddscxx)
+# link_directories(library/unitree_sdk2/thirdparty/lib/x86_64)
+# set(UNITREE_GO2_LIBS -pthread unitree_sdk2 ddsc ddscxx)
 
 include_directories(
   include
@@ -76,8 +76,8 @@ add_library(observation_buffer library/observation_buffer/observation_buffer.cpp
 target_link_libraries(observation_buffer "${TORCH_LIBRARIES}")
 set_property(TARGET observation_buffer PROPERTY CXX_STANDARD 14)
 
-add_executable(rl_sim src/rl_sim.cpp )
-target_link_libraries(rl_sim
+add_executable(rl_sim_a1 src/rl_sim_a1.cpp )
+target_link_libraries(rl_sim_a1
   ${catkin_LIBRARIES} -pthread
   rl_sdk observation_buffer yaml-cpp
 )
@@ -88,14 +88,20 @@ target_link_libraries(rl_real_a1
   rl_sdk observation_buffer yaml-cpp
 )
 
-add_executable(rl_real_go2 src/rl_real_go2.cpp )
-target_link_libraries(rl_real_go2
-  ${catkin_LIBRARIES} ${UNITREE_GO2_LIBS}
+add_executable(rl_sim_tron1 src/rl_sim_tron1.cpp )
+target_link_libraries(rl_sim_tron1
+  ${catkin_LIBRARIES} -pthread
   rl_sdk observation_buffer yaml-cpp
 )
 
-catkin_install_python(PROGRAMS
-  scripts/rl_sim.py
-  scripts/actuator_net.py
-  DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
-)
+# add_executable(rl_real_go2 src/rl_real_go2.cpp )
+# target_link_libraries(rl_real_go2
+#   ${catkin_LIBRARIES} ${UNITREE_GO2_LIBS}
+#   rl_sdk observation_buffer yaml-cpp
+# )
+
+# catkin_install_python(PROGRAMS
+#   scripts/rl_sim.py
+#   scripts/actuator_net.py
+#   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
+# )

@@ -1,7 +1,7 @@
 tron1_isaacgym:
   model_name: "policy_1.pt"
   framework: "isaacgym"
-  rows: 4
+  rows: 2
   cols: 3
   dt: 0.005
   decimation: 4
@@ -13,10 +13,10 @@ tron1_isaacgym:
                        -100, -100, -100]
   clip_actions_upper: [100, 100, 100,
                        100, 100, 100]
-  rl_kp: [20, 20, 20,
-          20, 20, 20]
-  rl_kd: [0.5, 0.5, 0.5,
-          0.5, 0.5, 0.5]
+  rl_kp: [40, 40, 40,
+          40, 40, 40]
+  rl_kd: [1.5, 1.5, 1.5,
+          1.5, 1.5, 1.5]
   fixed_kp: [80, 80, 80,
              80, 80, 80]
   fixed_kd: [3, 3, 3,
@@ -24,7 +24,7 @@ tron1_isaacgym:
   hip_scale_reduction: 0.5
   hip_scale_reduction_indices: [0, 3]
   num_of_dofs: 6
-  action_scale: 0.25
+  action_scale: 0.5
   lin_vel_scale: 2.0
   ang_vel_scale: 0.25
   dof_pos_scale: 1.0

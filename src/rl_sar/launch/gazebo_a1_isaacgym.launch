@@ -12,6 +12,7 @@
     <arg name="gui" default="true"/>
     <arg name="headless" default="false"/>
     <arg name="debug" default="false"/>
+    <arg name="plot" default="false"/>
     <!-- Debug mode will hung up the robot, use "true" or "false" to switch it. -->
     <arg name="user_debug" default="false"/>
 
@@ -23,6 +24,11 @@
         <arg name="use_sim_time" value="$(arg use_sim_time)"/>
         <arg name="headless" value="$(arg headless)"/>
     </include>
+
+    <!-- plotjuggler -->
+    <group if="$(arg plot)">
+      <node name="plotjuggler" pkg="plotjuggler" type="plotjuggler" args="--layout $(find rl_sar)/config/$(arg rname)_joint_info_plotjuggler_config.xml" required="true" output="screen"/>
+    </group>
 
     <!-- Load the URDF into the ROS Parameter Server -->
     <param name="robot_description"

@@ -1,0 +1,12 @@
+float32 FL_hip_pos
+float32 FL_thigh_pos
+float32 FL_calf_pos
+float32 FR_hip_pos
+float32 FR_thigh_pos
+float32 FR_calf_pos
+float32 RL_hip_pos
+float32 RL_thigh_pos
+float32 RL_calf_pos
+float32 RR_hip_pos
+float32 RR_thigh_pos
+float32 RR_calf_pos

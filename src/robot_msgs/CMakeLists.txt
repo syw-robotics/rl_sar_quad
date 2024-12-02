@@ -15,6 +15,7 @@ add_message_files(
   RobotCommand.msg
   RobotState.msg
   IMU.msg
+  A1JointPos.msg
 )
 
 generate_messages(

@@ -12,6 +12,7 @@
 #include "robot_msgs/MotorCommand.h"
 #include <csignal>
 #include <gazebo_msgs/SetModelState.h>
+#include "robot_msgs/A1JointPos.h"
 
 #include "matplotlibcpp.h"
 namespace plt = matplotlibcpp;
@@ -61,6 +62,8 @@ private:
     ros::ServiceClient gazebo_unpause_physics_client;
     std::map<std::string, ros::Publisher> joint_publishers;
     std::vector<robot_msgs::MotorCommand> joint_publishers_commands;
+    ros::Publisher joint_target_pos_publisher;
+    robot_msgs::A1JointPos joint_target_pos;
 
     void ModelStatesCallback(const gazebo_msgs::ModelStates::ConstPtr &msg);
     void JointStatesCallback(const sensor_msgs::JointState::ConstPtr &msg);

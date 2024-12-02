@@ -17,19 +17,19 @@ a1_isaacgym:
                        100, 100, 100,
                        100, 100, 100,
                        100, 100, 100]
-  rl_kp: [20, 20, 20,
+  rl_kp: [20, 20, 20, # rl_kp is for the policy
           20, 20, 20,
           20, 20, 20,
           20, 20, 20]
-  rl_kd: [0.5, 0.5, 0.5,
+  rl_kd: [0.5, 0.5, 0.5, # rl_kd is for the policy
           0.5, 0.5, 0.5,
           0.5, 0.5, 0.5,
           0.5, 0.5, 0.5]
-  fixed_kp: [80, 80, 80,
+  fixed_kp: [80, 80, 80, # fixed_kp is for position controlpolicy
              80, 80, 80,
              80, 80, 80,
              80, 80, 80]
-  fixed_kd: [3, 3, 3,
+  fixed_kd: [3, 3, 3, # fixed_kd is for position controlpolicy
              3, 3, 3,
              3, 3, 3,
              3, 3, 3]
