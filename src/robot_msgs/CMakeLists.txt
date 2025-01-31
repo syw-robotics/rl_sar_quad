@@ -15,7 +15,7 @@ add_message_files(
   RobotCommand.msg
   RobotState.msg
   IMU.msg
-  A1JointPos.msg
+  A1JointPos.msg  # Onlt useful when user want to obtain the joint position of A1 when simulating in Gazebo
 )
 
 generate_messages(

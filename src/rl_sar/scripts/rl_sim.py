@@ -1,14 +1,15 @@
+# Copyright (c) 2024-2025 Ziqi Fan
+# SPDX-License-Identifier: Apache-2.0
+
 import sys
 import os
 import torch
 import threading
 import time
 import rospy
-import numpy as np
 from gazebo_msgs.msg import ModelStates
-from sensor_msgs.msg import JointState
 from geometry_msgs.msg import Twist, Pose
-from robot_msgs.msg import MotorCommand
+from robot_msgs.msg import MotorState, MotorCommand
 from gazebo_msgs.srv import SetModelState, SetModelStateRequest
 from std_srvs.srv import Empty
 
@@ -18,6 +19,7 @@ from rl_sdk import *
 from observation_buffer import *
 
 CSV_LOGGER = False
+
 
 class RL_Sim(RL):
     def __init__(self):
@@ -40,47 +42,72 @@ class RL_Sim(RL):
 
         # history
         if len(self.params.observations_history) != 0:
-            self.history_obs_buf = ObservationBuffer(1, self.params.num_observations, len(self.params.observations_history))
-
-        # Due to the fact that the robot_state_publisher sorts the joint names alphabetically,
-        # the mapping table is established according to the order defined in the YAML file
-        sorted_joint_controller_names = sorted(self.params.joint_controller_names)
-        self.sorted_to_original_index = {}
-        for i in range(len(self.params.joint_controller_names)):
-            self.sorted_to_original_index[sorted_joint_controller_names[i]] = i
-        self.mapped_joint_positions = [0.0] * self.params.num_of_dofs
-        self.mapped_joint_velocities = [0.0] * self.params.num_of_dofs
-        self.mapped_joint_efforts = [0.0] * self.params.num_of_dofs
+            self.history_obs_buf = ObservationBuffer(
+                1, self.params.num_observations, len(self.params.observations_history)
+            )
 
         # init
         torch.set_grad_enabled(False)
-        self.joint_publishers_commands = [MotorCommand() for _ in range(self.params.num_of_dofs)]
+        self.joint_publishers_commands = [
+            MotorCommand() for _ in range(self.params.num_of_dofs)
+        ]
         self.InitObservations()
         self.InitOutputs()
         self.InitControl()
+        self.running_state = STATE.STATE_RL_RUNNING
 
         # model
-        model_path = os.path.join(os.path.dirname(__file__), f"../models/{self.robot_name}/{self.params.model_name}")
+        model_path = os.path.join(
+            os.path.dirname(__file__),
+            f"../models/{self.robot_name}/{self.params.model_name}",
+        )
         self.model = torch.jit.load(model_path)
 
         # publisher
         self.ros_namespace = rospy.get_param("ros_namespace", "")
         self.joint_publishers = {}
         for i in range(self.params.num_of_dofs):
-            topic_name = f"{self.ros_namespace}{self.params.joint_controller_names[i]}/command"
-            self.joint_publishers[self.params.joint_controller_names[i]] = rospy.Publisher(topic_name, MotorCommand, queue_size=10)
+            joint_name = self.params.joint_controller_names[i]
+            topic_name = f"{self.ros_namespace}{joint_name}/command"
+            self.joint_publishers[self.params.joint_controller_names[i]] = (
+                rospy.Publisher(topic_name, MotorCommand, queue_size=10)
+            )
 
         # subscriber
-        self.cmd_vel_subscriber = rospy.Subscriber("/cmd_vel", Twist, self.CmdvelCallback, queue_size=10)
-        self.model_state_subscriber = rospy.Subscriber("/gazebo/model_states", ModelStates, self.ModelStatesCallback, queue_size=10)
-        joint_states_topic = f"{self.ros_namespace}joint_states"
-        self.joint_state_subscriber = rospy.Subscriber(joint_states_topic, JointState, self.JointStatesCallback, queue_size=10)
+        self.cmd_vel_subscriber = rospy.Subscriber(
+            "/cmd_vel", Twist, self.CmdvelCallback, queue_size=10
+        )
+        self.model_state_subscriber = rospy.Subscriber(
+            "/gazebo/model_states", ModelStates, self.ModelStatesCallback, queue_size=10
+        )
+        self.joint_subscribers = {}
+        self.joint_positions = {}
+        self.joint_velocities = {}
+        self.joint_efforts = {}
+        for i in range(self.params.num_of_dofs):
+            joint_name = self.params.joint_controller_names[i]
+            topic_name = f"{self.ros_namespace}{joint_name}/state"
+            self.joint_subscribers[joint_name] = rospy.Subscriber(
+                topic_name,
+                MotorState,
+                lambda msg, name=joint_name: self.JointStatesCallback(msg, name),
+                queue_size=10,
+            )
+            self.joint_positions[joint_name] = 0.0
+            self.joint_velocities[joint_name] = 0.0
+            self.joint_efforts[joint_name] = 0.0
 
         # service
         self.gazebo_model_name = rospy.get_param("gazebo_model_name", "")
-        self.gazebo_set_model_state_client = rospy.ServiceProxy("/gazebo/set_model_state", SetModelState)
-        self.gazebo_pause_physics_client = rospy.ServiceProxy("/gazebo/pause_physics", Empty)
-        self.gazebo_unpause_physics_client = rospy.ServiceProxy("/gazebo/unpause_physics", Empty)
+        self.gazebo_set_model_state_client = rospy.ServiceProxy(
+            "/gazebo/set_model_state", SetModelState
+        )
+        self.gazebo_pause_physics_client = rospy.ServiceProxy(
+            "/gazebo/pause_physics", Empty
+        )
+        self.gazebo_unpause_physics_client = rospy.ServiceProxy(
+            "/gazebo/unpause_physics", Empty
+        )
 
         # loops
         self.thread_control = threading.Thread(target=self.ThreadControl)
@@ -120,9 +147,15 @@ class RL_Sim(RL):
         # state.imu.accelerometer
 
         for i in range(self.params.num_of_dofs):
-            state.motor_state.q[i] = self.mapped_joint_positions[i]
-            state.motor_state.dq[i] = self.mapped_joint_velocities[i]
-            state.motor_state.tauEst[i] = self.mapped_joint_efforts[i]
+            state.motor_state.q[i] = self.joint_positions[
+                self.params.joint_controller_names[i]
+            ]
+            state.motor_state.dq[i] = self.joint_velocities[
+                self.params.joint_controller_names[i]
+            ]
+            state.motor_state.tau_est[i] = self.joint_efforts[
+                self.params.joint_controller_names[i]
+            ]
 
     def SetCommand(self, command):
         for i in range(self.params.num_of_dofs):
@@ -133,7 +166,9 @@ class RL_Sim(RL):
             self.joint_publishers_commands[i].tau = command.motor_command.tau[i]
 
         for i in range(self.params.num_of_dofs):
-            self.joint_publishers[self.params.joint_controller_names[i]].publish(self.joint_publishers_commands[i])
+            self.joint_publishers[self.params.joint_controller_names[i]].publish(
+                self.joint_publishers_commands[i]
+            )
 
     def RobotControl(self):
         if self.control.control_state == STATE.STATE_RESET_SIMULATION:
@@ -165,24 +200,34 @@ class RL_Sim(RL):
     def CmdvelCallback(self, msg):
         self.cmd_vel = msg
 
-    def MapData(self, source_data, target_data):
-        for i in range(len(source_data)):
-            target_data[i] = source_data[self.sorted_to_original_index[self.params.joint_controller_names[i]]]
-
-    def JointStatesCallback(self, msg):
-        self.MapData(msg.position, self.mapped_joint_positions)
-        self.MapData(msg.velocity, self.mapped_joint_velocities)
-        self.MapData(msg.effort, self.mapped_joint_efforts)
+    def JointStatesCallback(self, msg, joint_name):
+        self.joint_positions[joint_name] = msg.q
+        self.joint_velocities[joint_name] = msg.dq
+        self.joint_efforts[joint_name] = msg.tau_est
 
     def RunModel(self):
         if self.running_state == STATE.STATE_RL_RUNNING and self.simulation_running:
-            self.obs.lin_vel = torch.tensor([[self.vel.linear.x, self.vel.linear.y, self.vel.linear.z]])
+            self.obs.lin_vel = torch.tensor(
+                [[self.vel.linear.x, self.vel.linear.y, self.vel.linear.z]]
+            )
             self.obs.ang_vel = torch.tensor(self.robot_state.imu.gyroscope).unsqueeze(0)
             # self.obs.commands = torch.tensor([[self.cmd_vel.linear.x, self.cmd_vel.linear.y, self.cmd_vel.angular.z]])
-            self.obs.commands = torch.tensor([[self.control.x, self.control.y, self.control.yaw]])
-            self.obs.base_quat = torch.tensor(self.robot_state.imu.quaternion).unsqueeze(0)
-            self.obs.dof_pos = torch.tensor(self.robot_state.motor_state.q).narrow(0, 0, self.params.num_of_dofs).unsqueeze(0)
-            self.obs.dof_vel = torch.tensor(self.robot_state.motor_state.dq).narrow(0, 0, self.params.num_of_dofs).unsqueeze(0)
+            self.obs.commands = torch.tensor(
+                [[self.control.x, self.control.y, self.control.yaw]]
+            )
+            self.obs.base_quat = torch.tensor(
+                self.robot_state.imu.quaternion
+            ).unsqueeze(0)
+            self.obs.dof_pos = (
+                torch.tensor(self.robot_state.motor_state.q)
+                .narrow(0, 0, self.params.num_of_dofs)
+                .unsqueeze(0)
+            )
+            self.obs.dof_vel = (
+                torch.tensor(self.robot_state.motor_state.dq)
+                .narrow(0, 0, self.params.num_of_dofs)
+                .unsqueeze(0)
+            )
 
             clamped_actions = self.Forward()
 
@@ -191,35 +236,58 @@ class RL_Sim(RL):
 
             self.obs.actions = clamped_actions
 
-            origin_output_torques = self.ComputeTorques(self.obs.actions)
+            origin_output_dof_tau = self.ComputeTorques(self.obs.actions)
 
-            # self.TorqueProtect(origin_output_torques)
+            # self.TorqueProtect(origin_output_dof_tau)
 
-            self.output_torques = torch.clamp(origin_output_torques, -(self.params.torque_limits), self.params.torque_limits)
+            self.output_dof_tau = torch.clamp(
+                origin_output_dof_tau,
+                -(self.params.torque_limits),
+                self.params.torque_limits,
+            )
             self.output_dof_pos = self.ComputePosition(self.obs.actions)
 
             if CSV_LOGGER:
-                tau_est = torch.tensor(self.mapped_joint_efforts).unsqueeze(0)
-                self.CSVLogger(self.output_torques, tau_est, self.obs.dof_pos, self.output_dof_pos, self.obs.dof_vel)
+                tau_est = torch.zeros((1, self.params.num_of_dofs))
+                for i in range(self.params.num_of_dofs):
+                    tau_est[0, i] = self.joint_efforts[
+                        self.params.joint_controller_names[i]
+                    ]
+                self.CSVLogger(
+                    self.output_dof_tau,
+                    tau_est,
+                    self.obs.dof_pos,
+                    self.output_dof_pos,
+                    self.obs.dof_vel,
+                )
 
     def Forward(self):
         torch.set_grad_enabled(False)
         clamped_obs = self.ComputeObservation()
         if len(self.params.observations_history) != 0:
             self.history_obs_buf.insert(clamped_obs)
-            history_obs = self.history_obs_buf.get_obs_vec(self.params.observations_history)
+            history_obs = self.history_obs_buf.get_obs_vec(
+                self.params.observations_history
+            )
             actions = self.model.forward(history_obs)
         else:
             actions = self.model.forward(clamped_obs)
-        if self.params.clip_actions_lower is not None and self.params.clip_actions_upper is not None:
-            return torch.clamp(actions, self.params.clip_actions_lower, self.params.clip_actions_upper)
+        if (
+            self.params.clip_actions_lower is not None
+            and self.params.clip_actions_upper is not None
+        ):
+            return torch.clamp(
+                actions, self.params.clip_actions_lower, self.params.clip_actions_upper
+            )
         else:
             return actions
 
     def ThreadControl(self):
         thread_period = self.params.dt
         thread_name = "thread_control"
-        print(f"[Thread Start] named: {thread_name}, period: {thread_period * 1000:.0f}(ms), cpu unspecified")
+        print(
+            f"[Thread Start] named: {thread_name}, period: {thread_period * 1000:.0f}(ms), cpu unspecified"
+        )
         while not rospy.is_shutdown():
             self.RobotControl()
             time.sleep(thread_period)
@@ -228,11 +296,14 @@ class RL_Sim(RL):
     def ThreadRL(self):
         thread_period = self.params.dt * self.params.decimation
         thread_name = "thread_rl"
-        print(f"[Thread Start] named: {thread_name}, period: {thread_period * 1000:.0f}(ms), cpu unspecified")
+        print(
+            f"[Thread Start] named: {thread_name}, period: {thread_period * 1000:.0f}(ms), cpu unspecified"
+        )
         while not rospy.is_shutdown():
             self.RunModel()
             time.sleep(thread_period)
         print("[Thread End] named: " + thread_name)
+
 
 if __name__ == "__main__":
     rl_sim = RL_Sim()

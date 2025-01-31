@@ -1,3 +1,8 @@
+/*
+ * Copyright (c) 2024-2025 Ziqi Fan
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 #include "rl_sdk.hpp"
 
 /* You may need to override this Forward() function
@@ -77,8 +82,9 @@ void RL::InitObservations()
 
 void RL::InitOutputs()
 {
-    this->output_torques = torch::zeros({1, this->params.num_of_dofs});
+    this->output_dof_tau = torch::zeros({1, this->params.num_of_dofs});
     this->output_dof_pos = this->params.default_dof_pos;
+    this->output_dof_vel = torch::zeros({1, this->params.num_of_dofs});
 }
 
 void RL::InitControl()
@@ -89,17 +95,12 @@ void RL::InitControl()
     this->control.yaw = 0.0;
 }
 
-torch::Tensor RL::ComputeTorques(torch::Tensor actions)
+void RL::ComputeOutput(const torch::Tensor &actions, torch::Tensor &output_dof_pos, torch::Tensor &output_dof_vel, torch::Tensor &output_dof_tau)
 {
-    torch::Tensor actions_scaled = actions * this->params.action_scale;
-    torch::Tensor output_torques = this->params.rl_kp * (actions_scaled + this->params.default_dof_pos - this->obs.dof_pos) - this->params.rl_kd * this->obs.dof_vel;
-    return output_torques;
-}
-
-torch::Tensor RL::ComputePosition(torch::Tensor actions)
-{
-    torch::Tensor actions_scaled = actions * this->params.action_scale;
-    return actions_scaled + this->params.default_dof_pos;
+    torch::Tensor joint_actions_scaled = actions * this->params.action_scale;
+    output_dof_pos = joint_actions_scaled + this->params.default_dof_pos;
+    output_dof_tau = this->params.rl_kp * (joint_actions_scaled + this->params.default_dof_pos - this->obs.dof_pos) - this->params.rl_kd * this->obs.dof_vel;
+    output_dof_tau = torch::clamp(output_dof_tau, -(this->params.torque_limits), this->params.torque_limits);
 }
 
 torch::Tensor RL::QuatRotateInverse(torch::Tensor q, torch::Tensor v, const std::string &framework)
@@ -168,6 +169,8 @@ void RL::StateController(const RobotState<double> *state, RobotCommand<double> *
             }
             std::cout << "\r" << std::flush << LOGGER::INFO << "Getting up " << std::fixed << std::setprecision(2) << getup_percent * 100.0 << std::flush;
         }
+        else
+        {
         if (this->control.control_state == STATE_RL_INIT)
         {
             this->control.control_state = STATE_WAITING;
@@ -184,6 +187,7 @@ void RL::StateController(const RobotState<double> *state, RobotCommand<double> *
             }
             this->running_state = STATE_POS_GETDOWN;
             std::cout << std::endl << LOGGER::INFO << "Switching to STATE_POS_GETDOWN" << std::endl;
+            }
         }
     }
     // init obs and start rl loop
@@ -202,13 +206,24 @@ void RL::StateController(const RobotState<double> *state, RobotCommand<double> *
     else if (this->running_state == STATE_RL_RUNNING)
     {
         std::cout << "\r" << std::flush << LOGGER::INFO << "RL Controller x:" << this->control.x << " y:" << this->control.y << " yaw:" << this->control.yaw << std::flush;
+
+        torch::Tensor _output_dof_pos, _output_dof_vel;
+        if (this->output_dof_pos_queue.try_pop(_output_dof_pos) && this->output_dof_vel_queue.try_pop(_output_dof_vel))
+        {
         for (int i = 0; i < this->params.num_of_dofs; ++i)
+            {
+                if (_output_dof_pos.defined() && _output_dof_pos.numel() > 0)
         {
             command->motor_command.q[i] = this->output_dof_pos[0][i].item<double>();
-            command->motor_command.dq[i] = 0;
+                }
+                if (_output_dof_vel.defined() && _output_dof_vel.numel() > 0)
+                {
+                    command->motor_command.dq[i] = this->output_dof_vel[0][i].item<double>();
+                }
             command->motor_command.kp[i] = this->params.rl_kp[0][i].item<double>();
             command->motor_command.kd[i] = this->params.rl_kd[0][i].item<double>();
             command->motor_command.tau[i] = 0;
+            }
         }
         if (this->control.control_state == STATE_POS_GETDOWN)
         {
@@ -261,13 +276,13 @@ void RL::StateController(const RobotState<double> *state, RobotCommand<double> *
     }
 }
 
-void RL::TorqueProtect(torch::Tensor origin_output_torques)
+void RL::TorqueProtect(torch::Tensor origin_output_dof_tau)
 {
     std::vector<int> out_of_range_indices;
     std::vector<double> out_of_range_values;
-    for (int i = 0; i < origin_output_torques.size(1); ++i)
+    for (int i = 0; i < origin_output_dof_tau.size(1); ++i)
     {
-        double torque_value = origin_output_torques[0][i].item<double>();
+        double torque_value = origin_output_dof_tau[0][i].item<double>();
         double limit_lower = -this->params.torque_limits[0][i].item<double>();
         double limit_upper = this->params.torque_limits[0][i].item<double>();
 
@@ -291,6 +306,55 @@ void RL::TorqueProtect(torch::Tensor origin_output_torques)
         // Just a reminder, no protection
         // this->control.control_state = STATE_POS_GETDOWN;
         // std::cout << LOGGER::INFO << "Switching to STATE_POS_GETDOWN"<< std::endl;
+    }
+}
+
+void RL::AttitudeProtect(const std::vector<double> &quaternion, float pitch_threshold, float roll_threshold)
+{
+    float rad2deg = 57.2958;
+    float w, x, y, z;
+
+    if (this->params.framework == "isaacgym")
+    {
+        w = quaternion[3];
+        x = quaternion[0];
+        y = quaternion[1];
+        z = quaternion[2];
+    }
+    else if (this->params.framework == "isaacsim")
+    {
+        w = quaternion[0];
+        x = quaternion[1];
+        y = quaternion[2];
+        z = quaternion[3];
+    }
+
+    // Calculate roll (rotation around the X-axis)
+    float sinr_cosp = 2 * (w * x + y * z);
+    float cosr_cosp = 1 - 2 * (x * x + y * y);
+    float roll = std::atan2(sinr_cosp, cosr_cosp) * rad2deg;
+
+    // Calculate pitch (rotation around the Y-axis)
+    float sinp = 2 * (w * y - z * x);
+    float pitch;
+    if (std::fabs(sinp) >= 1)
+    {
+        pitch = std::copysign(90.0, sinp); // Clamp to avoid out-of-range values
+    }
+    else
+    {
+        pitch = std::asin(sinp) * rad2deg;
+    }
+
+    if (std::fabs(roll) > roll_threshold)
+    {
+        // this->control.control_state = STATE_POS_GETDOWN;
+        std::cout << LOGGER::WARNING << "Roll exceeds " << roll_threshold << " degrees. Current: " << roll << " degrees." << std::endl;
+    }
+    if (std::fabs(pitch) > pitch_threshold)
+    {
+        // this->control.control_state = STATE_POS_GETDOWN;
+        std::cout << LOGGER::WARNING << "Pitch exceeds " << pitch_threshold << " degrees. Current: " << pitch << " degrees." << std::endl;
     }
 }
 
@@ -462,8 +526,8 @@ void RL::ReadYaml(std::string robot_name)
     this->params.ang_vel_scale = config["ang_vel_scale"].as<double>();
     this->params.dof_pos_scale = config["dof_pos_scale"].as<double>();
     this->params.dof_vel_scale = config["dof_vel_scale"].as<double>();
-    // this->params.commands_scale = torch::tensor(ReadVectorFromYaml<double>(config["commands_scale"])).view({1, -1});
-    this->params.commands_scale = torch::tensor({this->params.lin_vel_scale, this->params.lin_vel_scale, this->params.ang_vel_scale});
+    this->params.commands_scale = torch::tensor(ReadVectorFromYaml<double>(config["commands_scale"])).view({1, -1});
+    // this->params.commands_scale = torch::tensor({this->params.lin_vel_scale, this->params.lin_vel_scale, this->params.ang_vel_scale});
     this->params.rl_kp = torch::tensor(ReadVectorFromYaml<double>(config["rl_kp"], this->params.framework, rows, cols)).view({1, -1});
     this->params.rl_kd = torch::tensor(ReadVectorFromYaml<double>(config["rl_kd"], this->params.framework, rows, cols)).view({1, -1});
     this->params.fixed_kp = torch::tensor(ReadVectorFromYaml<double>(config["fixed_kp"], this->params.framework, rows, cols)).view({1, -1});

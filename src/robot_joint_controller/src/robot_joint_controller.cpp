@@ -1,3 +1,8 @@
+/*
+ * Copyright (c) 2024-2025 Ziqi Fan
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 #include "robot_joint_controller.h"
 #include <pluginlib/class_list_macros.h>
 
@@ -111,7 +116,7 @@ namespace robot_joint_controller
         lastCommand.dq = 0;
         lastState.dq = 0;
         lastCommand.tau = 0;
-        lastState.tauEst = 0;
+        lastState.tau_est = 0;
         command.initRT(lastCommand);
 
         pid_controller_.reset();
@@ -158,15 +163,15 @@ namespace robot_joint_controller
 
         lastState.q = currentPos;
         lastState.dq = currentVel;
-        // lastState.tauEst = calcTorque;
-        lastState.tauEst = joint.getEffort();
+        // lastState.tau_est = calcTorque;
+        lastState.tau_est = joint.getEffort();
 
         // publish state
         if (controller_state_publisher_ && controller_state_publisher_->trylock())
         {
             controller_state_publisher_->msg_.q = lastState.q;
             controller_state_publisher_->msg_.dq = lastState.dq;
-            controller_state_publisher_->msg_.tauEst = lastState.tauEst;
+            controller_state_publisher_->msg_.tau_est = lastState.tau_est;
             controller_state_publisher_->unlockAndPublish();
         }
     }

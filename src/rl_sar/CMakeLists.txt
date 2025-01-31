@@ -14,6 +14,8 @@ find_package(Torch REQUIRED)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${GAZEBO_CXX_FLAGS}")
 find_package(gazebo REQUIRED)
 
+find_package(TBB REQUIRED)
+
 find_package(catkin REQUIRED COMPONENTS
   controller_manager
   genmsg
@@ -63,7 +65,7 @@ include_directories(
 )
 
 add_library(rl_sdk library/rl_sdk/rl_sdk.cpp)
-target_link_libraries(rl_sdk "${TORCH_LIBRARIES}" Python3::Python Python3::Module)
+target_link_libraries(rl_sdk "${TORCH_LIBRARIES}" Python3::Python Python3::Module TBB::tbb)
 set_property(TARGET rl_sdk PROPERTY CXX_STANDARD 14)
 find_package(Python3 COMPONENTS NumPy)
 if(Python3_NumPy_FOUND)
@@ -76,8 +78,8 @@ add_library(observation_buffer library/observation_buffer/observation_buffer.cpp
 target_link_libraries(observation_buffer "${TORCH_LIBRARIES}")
 set_property(TARGET observation_buffer PROPERTY CXX_STANDARD 14)
 
-add_executable(rl_sim_a1 src/rl_sim_a1.cpp )
-target_link_libraries(rl_sim_a1
+add_executable(rl_sim src/rl_sim.cpp )
+target_link_libraries(rl_sim
   ${catkin_LIBRARIES} -pthread
   rl_sdk observation_buffer yaml-cpp
 )
@@ -88,20 +90,14 @@ target_link_libraries(rl_real_a1
   rl_sdk observation_buffer yaml-cpp
 )
 
-add_executable(rl_sim_tron1 src/rl_sim_tron1.cpp )
-target_link_libraries(rl_sim_tron1
-  ${catkin_LIBRARIES} -pthread
-  rl_sdk observation_buffer yaml-cpp
-)
-
 # add_executable(rl_real_go2 src/rl_real_go2.cpp )
 # target_link_libraries(rl_real_go2
 #   ${catkin_LIBRARIES} ${UNITREE_GO2_LIBS}
 #   rl_sdk observation_buffer yaml-cpp
 # )
 
-# catkin_install_python(PROGRAMS
-#   scripts/rl_sim.py
-#   scripts/actuator_net.py
-#   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
-# )
+catkin_install_python(PROGRAMS
+  scripts/rl_sim.py
+  scripts/actuator_net.py
+  DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
+)

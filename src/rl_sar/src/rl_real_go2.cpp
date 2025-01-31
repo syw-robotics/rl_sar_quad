@@ -1,3 +1,8 @@
+/*
+ * Copyright (c) 2024-2025 Ziqi Fan
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 #include "rl_real_go2.hpp"
 
 // #define PLOT
@@ -38,6 +43,7 @@ RL_Real::RL_Real()
 
     // init rl
     torch::autograd::GradMode::set_enabled(false);
+    torch::set_num_threads(4);
     if (!this->params.observations_history.empty())
     {
         this->history_obs_buf = ObservationBuffer(1, this->params.num_observations, this->params.observations_history.size());
@@ -122,7 +128,7 @@ void RL_Real::GetState(RobotState<double> *state)
     {
         state->motor_state.q[i] = this->unitree_low_state.motor_state()[state_mapping[i]].q();
         state->motor_state.dq[i] = this->unitree_low_state.motor_state()[state_mapping[i]].dq();
-        state->motor_state.tauEst[i] = this->unitree_low_state.motor_state()[state_mapping[i]].tau_est();
+        state->motor_state.tau_est[i] = this->unitree_low_state.motor_state()[state_mapping[i]].tau_est();
     }
 }
 
@@ -144,8 +150,6 @@ void RL_Real::SetCommand(const RobotCommand<double> *command)
 
 void RL_Real::RobotControl()
 {
-    std::lock_guard<std::mutex> lock(robot_state_mutex);
-
     this->motiontime++;
 
     this->GetState(&this->robot_state);
@@ -155,8 +159,6 @@ void RL_Real::RobotControl()
 
 void RL_Real::RunModel()
 {
-    std::lock_guard<std::mutex> lock(robot_state_mutex);
-
     if (this->running_state == STATE_RL_RUNNING)
     {
         this->obs.ang_vel = torch::tensor(this->robot_state.imu.gyroscope).unsqueeze(0);
@@ -168,23 +170,34 @@ void RL_Real::RunModel()
 
         torch::Tensor clamped_actions = this->Forward();
 
+        this->obs.actions = clamped_actions;
+
         for (int i : this->params.hip_scale_reduction_indices)
         {
             clamped_actions[0][i] *= this->params.hip_scale_reduction;
         }
 
-        this->obs.actions = clamped_actions;
+        this->ComputeOutput(this->obs.actions, this->output_dof_pos, this->output_dof_vel, this->output_dof_tau);
 
-        torch::Tensor origin_output_torques = this->ComputeTorques(this->obs.actions);
+        if (this->output_dof_pos.defined() && this->output_dof_pos.numel() > 0)
+        {
+            output_dof_pos_queue.push(this->output_dof_pos);
+        }
+        if (this->output_dof_vel.defined() && this->output_dof_vel.numel() > 0)
+        {
+            output_dof_vel_queue.push(this->output_dof_vel);
+        }
+        if (this->output_dof_tau.defined() && this->output_dof_tau.numel() > 0)
+        {
+            output_dof_tau_queue.push(this->output_dof_tau);
+        }
 
-        this->TorqueProtect(origin_output_torques);
-
-        this->output_torques = torch::clamp(origin_output_torques, -(this->params.torque_limits), this->params.torque_limits);
-        this->output_dof_pos = this->ComputePosition(this->obs.actions);
+        this->TorqueProtect(this->output_dof_tau);
+        this->AttitudeProtect(this->robot_state.imu.quaternion, 75.0f, 75.0f);
 
 #ifdef CSV_LOGGER
-        torch::Tensor tau_est = torch::tensor(this->robot_state.motor_state.tauEst).unsqueeze(0);
-        this->CSVLogger(this->output_torques, tau_est, this->obs.dof_pos, this->output_dof_pos, this->obs.dof_vel);
+        torch::Tensor tau_est = torch::tensor(this->robot_state.motor_state.tau_est).unsqueeze(0);
+        this->CSVLogger(this->output_dof_tau, tau_est, this->obs.dof_pos, this->output_dof_pos, this->obs.dof_vel);
 #endif
     }
 }
@@ -355,7 +368,7 @@ int main(int argc, char **argv)
     while (1)
     {
         sleep(10);
-    };
+    }
 
     return 0;
 }

@@ -1,4 +1,8 @@
+# Copyright (c) 2024-2025 Ziqi Fan
+# SPDX-License-Identifier: Apache-2.0
+
 import torch
+
 
 class ObservationBuffer:
     def __init__(self, num_envs, num_obs, include_history_steps):
@@ -16,10 +20,14 @@ class ObservationBuffer:
 
     def insert(self, new_obs):
         # Shift observations back.
-        self.obs_buf[:, : self.num_obs * (self.include_history_steps - 1)] = self.obs_buf[:,self.num_obs : self.num_obs * self.include_history_steps].clone()
+        self.obs_buf[:, : self.num_obs * (self.include_history_steps - 1)] = (
+            self.obs_buf[
+                :, self.num_obs : self.num_obs * self.include_history_steps
+            ].clone()
+        )
 
         # Add new observation.
-        self.obs_buf[:, -self.num_obs:] = new_obs
+        self.obs_buf[:, -self.num_obs :] = new_obs
 
     def get_obs_vec(self, obs_ids):
         """Gets history of observations indexed by obs_ids.
@@ -31,7 +39,11 @@ class ObservationBuffer:
         """
 
         obs = []
-        for obs_id in reversed(sorted(obs_ids)):
+        for obs_id in reversed(obs_ids):
             slice_idx = self.include_history_steps - obs_id - 1
-            obs.append(self.obs_buf[:, slice_idx * self.num_obs : (slice_idx + 1) * self.num_obs])
+            obs.append(
+                self.obs_buf[
+                    :, slice_idx * self.num_obs : (slice_idx + 1) * self.num_obs
+                ]
+            )
         return torch.cat(obs, dim=-1)

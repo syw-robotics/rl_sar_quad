@@ -1,3 +1,6 @@
+# Copyright (c) 2024-2025 Ziqi Fan
+# SPDX-License-Identifier: Apache-2.0
+
 import torch
 import yaml
 import os
@@ -7,11 +10,13 @@ from enum import Enum, auto
 
 BASE_PATH = os.path.join(os.path.dirname(__file__), "../")
 
+
 class LOGGER:
     INFO = "\033[0;37m[INFO]\033[0m "
     WARNING = "\033[0;33m[WARNING]\033[0m "
     ERROR = "\033[0;31m[ERROR]\033[0m "
     DEBUG = "\033[0;32m[DEBUG]\033[0m "
+
 
 class RobotCommand:
     def __init__(self):
@@ -24,6 +29,7 @@ class RobotCommand:
             self.tau = [0.0] * 12
             self.kp = [0.0] * 12
             self.kd = [0.0] * 12
+
 
 class RobotState:
     def __init__(self):
@@ -41,8 +47,9 @@ class RobotState:
             self.q = [0.0] * 12
             self.dq = [0.0] * 12
             self.ddq = [0.0] * 12
-            self.tauEst = [0.0] * 12
+            self.tau_est = [0.0] * 12
             self.cur = [0.0] * 12
+
 
 class STATE(Enum):
     STATE_WAITING = 0
@@ -53,12 +60,14 @@ class STATE(Enum):
     STATE_RESET_SIMULATION = auto()
     STATE_TOGGLE_SIMULATION = auto()
 
+
 class Control:
     def __init__(self):
         self.control_state = STATE.STATE_WAITING
         self.x = 0.0
         self.y = 0.0
         self.yaw = 0.0
+
 
 class ModelParams:
     def __init__(self):
@@ -91,6 +100,7 @@ class ModelParams:
         self.default_dof_pos = None
         self.joint_controller_names = None
 
+
 class Observations:
     def __init__(self):
         self.lin_vel = None
@@ -101,6 +111,7 @@ class Observations:
         self.dof_pos = None
         self.dof_vel = None
         self.actions = None
+
 
 class RL:
     # Static variables
@@ -122,7 +133,9 @@ class RL:
 
         # others
         self.robot_name = ""
-        self.running_state = STATE.STATE_RL_RUNNING  # default running_state set to STATE_RL_RUNNING
+        self.running_state = (
+            STATE.STATE_RL_RUNNING
+        )  # default running_state set to STATE_RL_RUNNING
         self.simulation_running = False
 
         ### protected in cpp ###
@@ -139,24 +152,36 @@ class RL:
         obs_list = []
         for observation in self.params.observations:
             """
-                The first argument of the QuatRotateInverse function is the quaternion representing the robot's orientation, and the second argument is in the world coordinate system. The function outputs the value of the second argument in the body coordinate system.
-                In IsaacGym, the coordinate system for angular velocity is in the world coordinate system. During training, the angular velocity in the observation uses QuatRotateInverse to transform the coordinate system to the body coordinate system.
-                In Gazebo, the coordinate system for angular velocity is also in the world coordinate system, so QuatRotateInverse is needed to transform the coordinate system to the body coordinate system.
-                In some real robots like Unitree, if the coordinate system for the angular velocity is already in the body coordinate system, no transformation is necessary.
-                Forgetting to perform the transformation or performing it multiple times may cause controller crashes when the rotation reaches 180 degrees.
+            The first argument of the QuatRotateInverse function is the quaternion representing the robot's orientation, and the second argument is in the world coordinate system. The function outputs the value of the second argument in the body coordinate system.
+            In IsaacGym, the coordinate system for angular velocity is in the world coordinate system. During training, the angular velocity in the observation uses QuatRotateInverse to transform the coordinate system to the body coordinate system.
+            In Gazebo, the coordinate system for angular velocity is also in the world coordinate system, so QuatRotateInverse is needed to transform the coordinate system to the body coordinate system.
+            In some real robots like Unitree, if the coordinate system for the angular velocity is already in the body coordinate system, no transformation is necessary.
+            Forgetting to perform the transformation or performing it multiple times may cause controller crashes when the rotation reaches 180 degrees.
             """
             if observation == "lin_vel":
                 obs_list.append(self.obs.lin_vel * self.params.lin_vel_scale)
             elif observation == "ang_vel_body":
                 obs_list.append(self.obs.ang_vel * self.params.ang_vel_scale)
             elif observation == "ang_vel_world":
-                obs_list.append(self.QuatRotateInverse(self.obs.base_quat, self.obs.ang_vel, self.params.framework) * self.params.ang_vel_scale)
+                obs_list.append(
+                    self.QuatRotateInverse(
+                        self.obs.base_quat, self.obs.ang_vel, self.params.framework
+                    )
+                    * self.params.ang_vel_scale
+                )
             elif observation == "gravity_vec":
-                obs_list.append(self.QuatRotateInverse(self.obs.base_quat, self.obs.gravity_vec, self.params.framework))
+                obs_list.append(
+                    self.QuatRotateInverse(
+                        self.obs.base_quat, self.obs.gravity_vec, self.params.framework
+                    )
+                )
             elif observation == "commands":
                 obs_list.append(self.obs.commands * self.params.commands_scale)
             elif observation == "dof_pos":
-                obs_list.append((self.obs.dof_pos - self.params.default_dof_pos) * self.params.dof_pos_scale)
+                obs_list.append(
+                    (self.obs.dof_pos - self.params.default_dof_pos)
+                    * self.params.dof_pos_scale
+                )
             elif observation == "dof_vel":
                 obs_list.append(self.obs.dof_vel * self.params.dof_vel_scale)
             elif observation == "actions":
@@ -176,7 +201,7 @@ class RL:
         self.obs.actions = torch.zeros(1, self.params.num_of_dofs, dtype=torch.float)
 
     def InitOutputs(self):
-        self.output_torques = torch.zeros(1, self.params.num_of_dofs, dtype=torch.float)
+        self.output_dof_tau = torch.zeros(1, self.params.num_of_dofs, dtype=torch.float)
         self.output_dof_pos = self.params.default_dof_pos
 
     def InitControl(self):
@@ -187,8 +212,12 @@ class RL:
 
     def ComputeTorques(self, actions):
         actions_scaled = actions * self.params.action_scale
-        output_torques = self.params.rl_kp * (actions_scaled + self.params.default_dof_pos - self.obs.dof_pos) - self.params.rl_kd * self.obs.dof_vel
-        return output_torques
+        output_dof_tau = (
+            self.params.rl_kp
+            * (actions_scaled + self.params.default_dof_pos - self.obs.dof_pos)
+            - self.params.rl_kd * self.obs.dof_vel
+        )
+        return output_dof_tau
 
     def ComputePosition(self, actions):
         actions_scaled = actions * self.params.action_scale
@@ -202,9 +231,13 @@ class RL:
             q_w = q[:, 3]
             q_vec = q[:, 0:3]
         shape = q.shape
-        a = v * (2.0 * q_w ** 2 - 1.0).unsqueeze(-1)
+        a = v * (2.0 * q_w**2 - 1.0).unsqueeze(-1)
         b = torch.cross(q_vec, v, dim=-1) * q_w.unsqueeze(-1) * 2.0
-        c = q_vec * torch.bmm(q_vec.view(shape[0], 1, 3), v.view(shape[0], 3, 1)).squeeze(-1) * 2.0
+        c = (
+            q_vec
+            * torch.bmm(q_vec.view(shape[0], 1, 3), v.view(shape[0], 3, 1)).squeeze(-1)
+            * 2.0
+        )
         return a - b + c
 
     def StateController(self, state, command):
@@ -227,12 +260,24 @@ class RL:
                 self.getup_percent += 1 / 500.0
                 self.getup_percent = min(self.getup_percent, 1.0)
                 for i in range(self.params.num_of_dofs):
-                    command.motor_command.q[i] = (1 - self.getup_percent) * self.now_state.motor_state.q[i] + self.getup_percent * self.params.default_dof_pos[0][i].item()
+                    command.motor_command.q[i] = (
+                        1 - self.getup_percent
+                    ) * self.now_state.motor_state.q[
+                        i
+                    ] + self.getup_percent * self.params.default_dof_pos[
+                        0
+                    ][
+                        i
+                    ].item()
                     command.motor_command.dq[i] = 0
                     command.motor_command.kp[i] = self.params.fixed_kp[0][i].item()
                     command.motor_command.kd[i] = self.params.fixed_kd[0][i].item()
                     command.motor_command.tau[i] = 0
-                print("\r" + LOGGER.INFO + f"Getting up {self.getup_percent * 100.0:.1f}", end='', flush=True)
+                print(
+                    "\r" + LOGGER.INFO + f"Getting up {self.getup_percent * 100.0:.1f}",
+                    end="",
+                    flush=True,
+                )
 
             if self.control.control_state == STATE.STATE_RL_INIT:
                 self.control.control_state = STATE.STATE_WAITING
@@ -258,7 +303,13 @@ class RL:
 
         # rl loop
         if self.running_state == STATE.STATE_RL_RUNNING:
-            print("\r" + LOGGER.INFO + f"RL Controller x: {self.control.x:.1f} y: {self.control.y:.1f} yaw: {self.control.yaw:.1f}", end='', flush=True)
+            print(
+                "\r"
+                + LOGGER.INFO
+                + f"RL Controller x: {self.control.x:.1f} y: {self.control.y:.1f} yaw: {self.control.yaw:.1f}",
+                end="",
+                flush=True,
+            )
             for i in range(self.params.num_of_dofs):
                 command.motor_command.q[i] = self.output_dof_pos[0][i].item()
                 command.motor_command.dq[i] = 0
@@ -288,12 +339,24 @@ class RL:
                 self.getdown_percent += 1 / 500.0
                 self.getdown_percent = min(1.0, self.getdown_percent)
                 for i in range(self.params.num_of_dofs):
-                    command.motor_command.q[i] = (1 - self.getdown_percent) * self.now_state.motor_state.q[i] + self.getdown_percent * self.start_state.motor_state.q[i]
+                    command.motor_command.q[i] = (
+                        1 - self.getdown_percent
+                    ) * self.now_state.motor_state.q[
+                        i
+                    ] + self.getdown_percent * self.start_state.motor_state.q[
+                        i
+                    ]
                     command.motor_command.dq[i] = 0
                     command.motor_command.kp[i] = self.params.fixed_kp[0][i].item()
                     command.motor_command.kd[i] = self.params.fixed_kd[0][i].item()
                     command.motor_command.tau[i] = 0
-                print("\r" + LOGGER.INFO + f"Getting down {self.getdown_percent * 100.0:.1f}", end='', flush=True)
+                print(
+                    "\r"
+                    + LOGGER.INFO
+                    + f"Getting down {self.getdown_percent * 100.0:.1f}",
+                    end="",
+                    flush=True,
+                )
 
             if self.getdown_percent == 1:
                 self.InitObservations()
@@ -302,12 +365,12 @@ class RL:
                 self.running_state = STATE.STATE_WAITING
                 print("\r\n" + LOGGER.INFO + "Switching to STATE_WAITING")
 
-    def TorqueProtect(self, origin_output_torques):
+    def TorqueProtect(self, origin_output_dof_tau):
         out_of_range_indices = []
         out_of_range_values = []
 
-        for i in range(origin_output_torques.size(1)):
-            torque_value = origin_output_torques[0][i].item()
+        for i in range(origin_output_dof_tau.size(1)):
+            torque_value = origin_output_dof_tau[0][i].item()
             limit_lower = -self.params.torque_limits[0][i].item()
             limit_upper = self.params.torque_limits[0][i].item()
 
@@ -321,7 +384,10 @@ class RL:
                 limit_lower = -self.params.torque_limits[0][index].item()
                 limit_upper = self.params.torque_limits[0][index].item()
 
-                print(LOGGER.WARNING + f"Torque({index + 1})={value} out of range({limit_lower}, {limit_upper})")
+                print(
+                    LOGGER.WARNING
+                    + f"Torque({index + 1})={value} out of range({limit_lower}, {limit_upper})"
+                )
 
             # Just a reminder, no protection
             self.control.control_state = STATE.STATE_POS_GETDOWN
@@ -329,26 +395,26 @@ class RL:
 
     def KeyboardInterface(self, key):
         try:
-            if hasattr(key, 'char'):
-                if key.char == '0':
+            if hasattr(key, "char"):
+                if key.char == "0":
                     self.control.control_state = STATE.STATE_POS_GETUP
-                elif key.char == 'p':
+                elif key.char == "p":
                     self.control.control_state = STATE.STATE_RL_INIT
-                elif key.char == '1':
+                elif key.char == "1":
                     self.control.control_state = STATE.STATE_POS_GETDOWN
-                elif key.char == 'w':
+                elif key.char == "w":
                     self.control.x += 0.1
-                elif key.char == 's':
+                elif key.char == "s":
                     self.control.x -= 0.1
-                elif key.char == 'a':
+                elif key.char == "a":
                     self.control.yaw += 0.1
-                elif key.char == 'd':
+                elif key.char == "d":
                     self.control.yaw -= 0.1
-                elif key.char == 'j':
+                elif key.char == "j":
                     self.control.y += 0.1
-                elif key.char == 'l':
+                elif key.char == "l":
                     self.control.y -= 0.1
-                elif key.char == 'r':
+                elif key.char == "r":
                     self.control.control_state = STATE.STATE_RESET_SIMULATION
             else:
                 if key == keyboard.Key.enter:
@@ -376,7 +442,7 @@ class RL:
         # The config file is located at "rl_sar/src/rl_sar/models/<robot_name>/config.yaml"
         config_path = os.path.join(BASE_PATH, "models", robot_name, "config.yaml")
         try:
-            with open(config_path, 'r') as f:
+            with open(config_path, "r") as f:
                 config = yaml.safe_load(f)[robot_name]
         except FileNotFoundError as e:
             print(LOGGER.ERROR + f"The file '{config_path}' does not exist")
@@ -395,28 +461,67 @@ class RL:
         self.params.action_scale = config["action_scale"]
         self.params.hip_scale_reduction = config["hip_scale_reduction"]
         self.params.hip_scale_reduction_indices = config["hip_scale_reduction_indices"]
-        if config["clip_actions_lower"] is None and config["clip_actions_upper"] is None:
+        if (
+            config["clip_actions_lower"] is None
+            and config["clip_actions_upper"] is None
+        ):
             self.params.clip_actions_upper = None
             self.params.clip_actions_lower = None
         else:
-            self.params.clip_actions_upper = torch.tensor(self.ReadVectorFromYaml(config["clip_actions_upper"], self.params.framework, rows, cols)).view(1, -1)
-            self.params.clip_actions_lower = torch.tensor(self.ReadVectorFromYaml(config["clip_actions_lower"], self.params.framework, rows, cols)).view(1, -1)
+            self.params.clip_actions_upper = torch.tensor(
+                self.ReadVectorFromYaml(
+                    config["clip_actions_upper"], self.params.framework, rows, cols
+                )
+            ).view(1, -1)
+            self.params.clip_actions_lower = torch.tensor(
+                self.ReadVectorFromYaml(
+                    config["clip_actions_lower"], self.params.framework, rows, cols
+                )
+            ).view(1, -1)
         self.params.num_of_dofs = config["num_of_dofs"]
         self.params.lin_vel_scale = config["lin_vel_scale"]
         self.params.ang_vel_scale = config["ang_vel_scale"]
         self.params.dof_pos_scale = config["dof_pos_scale"]
         self.params.dof_vel_scale = config["dof_vel_scale"]
-        self.params.commands_scale = torch.tensor([self.params.lin_vel_scale, self.params.lin_vel_scale, self.params.ang_vel_scale])
-        self.params.rl_kp = torch.tensor(self.ReadVectorFromYaml(config["rl_kp"], self.params.framework, rows, cols)).view(1, -1)
-        self.params.rl_kd = torch.tensor(self.ReadVectorFromYaml(config["rl_kd"], self.params.framework, rows, cols)).view(1, -1)
-        self.params.fixed_kp = torch.tensor(self.ReadVectorFromYaml(config["fixed_kp"], self.params.framework, rows, cols)).view(1, -1)
-        self.params.fixed_kd = torch.tensor(self.ReadVectorFromYaml(config["fixed_kd"], self.params.framework, rows, cols)).view(1, -1)
-        self.params.torque_limits = torch.tensor(self.ReadVectorFromYaml(config["torque_limits"], self.params.framework, rows, cols)).view(1, -1)
-        self.params.default_dof_pos = torch.tensor(self.ReadVectorFromYaml(config["default_dof_pos"], self.params.framework, rows, cols)).view(1, -1)
-        self.params.joint_controller_names = self.ReadVectorFromYaml(config["joint_controller_names"], self.params.framework, rows, cols)
+        self.params.commands_scale = torch.tensor(
+            [
+                self.params.lin_vel_scale,
+                self.params.lin_vel_scale,
+                self.params.ang_vel_scale,
+            ]
+        )
+        self.params.rl_kp = torch.tensor(
+            self.ReadVectorFromYaml(config["rl_kp"], self.params.framework, rows, cols)
+        ).view(1, -1)
+        self.params.rl_kd = torch.tensor(
+            self.ReadVectorFromYaml(config["rl_kd"], self.params.framework, rows, cols)
+        ).view(1, -1)
+        self.params.fixed_kp = torch.tensor(
+            self.ReadVectorFromYaml(
+                config["fixed_kp"], self.params.framework, rows, cols
+            )
+        ).view(1, -1)
+        self.params.fixed_kd = torch.tensor(
+            self.ReadVectorFromYaml(
+                config["fixed_kd"], self.params.framework, rows, cols
+            )
+        ).view(1, -1)
+        self.params.torque_limits = torch.tensor(
+            self.ReadVectorFromYaml(
+                config["torque_limits"], self.params.framework, rows, cols
+            )
+        ).view(1, -1)
+        self.params.default_dof_pos = torch.tensor(
+            self.ReadVectorFromYaml(
+                config["default_dof_pos"], self.params.framework, rows, cols
+            )
+        ).view(1, -1)
+        self.params.joint_controller_names = self.ReadVectorFromYaml(
+            config["joint_controller_names"], self.params.framework, rows, cols
+        )
 
     def CSVInit(self, robot_name):
-        self.csv_filename = os.path.join(BASE_PATH, "models", robot_name, 'motor')
+        self.csv_filename = os.path.join(BASE_PATH, "models", robot_name, "motor")
 
         # Uncomment these lines if need timestamp for file name
         # now = datetime.now()
@@ -425,7 +530,7 @@ class RL:
 
         self.csv_filename += ".csv"
 
-        with open(self.csv_filename, 'w', newline='') as file:
+        with open(self.csv_filename, "w", newline="") as file:
             writer = csv.writer(file)
 
             header = []
@@ -438,7 +543,7 @@ class RL:
             writer.writerow(header)
 
     def CSVLogger(self, torque, tau_est, joint_pos, joint_pos_target, joint_vel):
-        with open(self.csv_filename, 'a', newline='') as file:
+        with open(self.csv_filename, "a", newline="") as file:
             writer = csv.writer(file)
 
             row = []

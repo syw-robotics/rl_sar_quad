@@ -1,35 +1,34 @@
-# rl_sar
+# rl_sar_quad
 
-[中文文档](README_CN.md)
+**ROS版本: [ROS-Noetic](https://github.com/fan-ziqi/rl_sar/tree/main)**
 
-**Version Select: [ROS-Noetic](https://github.com/fan-ziqi/rl_sar/tree/main) | [ROS2-Foxy](https://github.com/fan-ziqi/rl_sar/tree/ros2)**
+本仓库修改自[rl_sar](https://github.com/fan-ziqi/rl_sar), 提供了四足机器人强化学习算法的sim2sim验证(gazebo)与实物部署框架(以HIMLoco为例)
 
-This repository provides a framework for simulation verification and physical deployment of robot reinforcement learning algorithms, suitable for quadruped robots, wheeled robots, and humanoid robots. "sar" stands for "simulation and real"
+特性：
+- 支持IaacGym, IsaacLab，用`framework`加以区分, 主要区别是四元数wxyz和xyzw顺序的convention差异
+- 集成plotjuggler, 用于实时监控仿真中关节数据(gazebo_a1_xxx.launch文件中, only cpp)
+- 代码有python和cpp两个版本，python版本可以在`src/rl_sar/scripts`中找到
+  - `cpp`: sim2sim & 实机部署
+  - `python`: sim2sim
 
-feature:
-- Support legged_gym based on IaacGym and IsaacLab based on IsaacSim. Use `framework` to distinguish.
-- The code has two versions: **ROS** and **ROS2**
-- The code supports both cpp and python, you can find python version in `src/rl_sar/scripts`
+状态：
+- 仅A1的example经过验证
 
-[Click to discuss on Discord](https://discord.gg/vmVjkhVugU)
-
-## Preparation
-
-Clone the code
+## 准备
 
 ```bash
 git clone https://github.com/fan-ziqi/rl_sar.git
 ```
 
-## Dependency
+## 依赖
 
-This project uses `ros-noetic` (Ubuntu 20.04) and requires the installation of the following ROS dependency packages:
+本项目使用`ros-noetic`(Ubuntu20.04)，且需要安装以下的ros依赖包
 
 ```bash
 sudo apt install ros-noetic-teleop-twist-keyboard ros-noetic-controller-interface ros-noetic-gazebo-ros-control ros-noetic-joint-state-controller ros-noetic-effort-controllers ros-noetic-joint-trajectory-controller
 ```
 
-Download and deploy `libtorch` at any location
+在任意位置下载并部署`libtorch`
 
 ```bash
 cd /path/to/your/torchlib
@@ -38,7 +37,7 @@ unzip libtorch-cxx11-abi-shared-with-deps-2.0.1+cpu.zip -d ./
 echo 'export Torch_DIR=/path/to/your/torchlib' >> ~/.bashrc
 ```
 
-Install `yaml-cpp` and `lcm`. If you are using Ubuntu, you can directly use the package manager for installation:
+安装`yaml-cpp`和`lcm`，若您使用Ubuntu，可以直接使用包管理器进行安装
 
 ```bash
 sudo apt install liblcm-dev libyaml-cpp-dev
@@ -46,9 +45,9 @@ sudo apt install liblcm-dev libyaml-cpp-dev
 
 <details>
 
-<summary>You can also use source code installation, click to expand</summary>
+<summary>也可以使用源码安装，点击展开</summary>
 
-Install yaml-cpp
+安装yaml-cpp
 
 ```bash
 git clone https://github.com/jbeder/yaml-cpp.git
@@ -58,7 +57,7 @@ sudo make install
 sudo ldconfig
 ```
 
-Install lcm
+安装lcm
 
 ```bash
 git clone https://github.com/lcm-proj/lcm.git
@@ -69,33 +68,33 @@ sudo ldconfig
 ```
 </details>
 
-## Compilation
+## 编译
 
-Compile in the root directory of the project
+在项目根目录编译
 
 ```bash
 cd ..
 catkin build
 ```
 
-If catkin build report errors: `Unable to find either executable 'empy' or Python module 'em'`, run `catkin config -DPYTHON_EXECUTABLE=/usr/bin/python3` before `catkin build`
+如果 catkin build 报错: `Unable to find either executable 'empy' or Python module 'em'`, 在`catkin build` 之前执行 `catkin config -DPYTHON_EXECUTABLE=/usr/bin/python3`
 
-## Running
+## 运行
 
-In the following text, **\<ROBOT\>_\<PLATFORM\>** is used to represent different environments, which can be `a1_isaacgym`, `a1_isaacsim`, `go2_isaacgym`, `gr1t1_isaacgym`, or `gr1t2_isaacgym`.
+下文中使用 **\<ROBOT\>_\<FRAMEWORK\>** 代替表示不同的环境，可以是 `a1_isaacgym` 、 `a1_isaacsim` 、 `go2_isaacgym` 、 `gr1t1_isaacgym` 、 `gr1t2_isaacgym`
 
-Before running, copy the trained pt model file to `rl_sar/src/rl_sar/models/<ROBOT>_<PLATFORM>`, and configure the parameters in `config.yaml`.
+运行前请将训练好的pt模型文件拷贝到`rl_sar/src/rl_sar/models/<ROBOT>_<FRAMEWORK>`中，并配置`config.yaml`中的参数。
 
-### Simulation
+### 仿真
 
-Open a terminal, launch the gazebo simulation environment
+打开一个终端，启动gazebo仿真环境
 
 ```bash
 source devel/setup.bash
-roslaunch rl_sar gazebo_<ROBOT>_<PLATFORM>.launch
+roslaunch rl_sar gazebo_<ROBOT>_<FRAMEWORK>.launch
 ```
 
-Open a new terminal, launch the control program
+打开一个新终端，启动控制程序
 
 ```bash
 source devel/setup.bash
@@ -103,84 +102,67 @@ source devel/setup.bash
 (for python version) rosrun rl_sar rl_sim.py
 ```
 
-Control:
+控制：
 
-* Press **\<Enter\>** to toggle simulation start/stop.
-* **W** and **S** controls x-axis, **A** and **D** controls yaw, and **J** and **L** controls y-axis.
-* Press **\<Space\>** to sets all control commands to zero.
-* If robot falls down, press **R** to reset Gazebo environment.
+* 按 **\<Enter\>** 切换仿真器运行/停止。
+* **W** 和 **S** 控制x轴，**A** 和 **D** 控制yaw轴，**J** 和 **L** 控制y轴，按下空格重置控制指令。
+* 按 **\<Space\>** 将所有控制指令设置为零。
+* 如果机器人摔倒，按 **R** 重置Gazebo环境。
 
-### Real Robots
+### 真实机器人
+> 实机部署不依赖ROS
 
 #### Unitree A1
 
-Unitree A1 can be connected using both wireless and wired methods:
+与Unitree A1连接可以使用无线与有线两种方式
 
-* Wireless: Connect to the Unitree starting with WIFI broadcasted by the robot **(Note: Wireless connection may lead to packet loss, disconnection, or even loss of control, please ensure safety)**
-* Wired: Use an Ethernet cable to connect any port on the computer and the robot, configure the computer IP as 192.168.123.162, and the gateway as 255.255.255.0
+* 无线：连接机器人发出的Unitree开头的WIFI **（注意：无线连接可能会出现丢包断联甚至失控，请注意安全）**
+* 有线：用网线连接计算机和机器人的任意网口，配置计算机ip为192.168.123.162，网关255.255.255.0
 
-Open a new terminal and start the control program
+新建终端，启动控制程序
 
 ```bash
 source devel/setup.bash
 rosrun rl_sar rl_real_a1
 ```
 
-Press the **R2** button on the controller to switch the robot to the default standing position, press **R1** to switch to RL control mode, and press **L2** in any state to switch to the initial lying position. The left stick controls x-axis up and down, controls yaw left and right, and the right stick controls y-axis left and right.
+按下遥控器的**R2**键让机器人切换到默认站起姿态，按下**R1**键切换到RL控制模式，任意状态按下**L2**切换到最初的趴下姿态。左摇杆上下控制x左右控制yaw，右摇杆左右控制y。
 
-Or press **0** on the keyboard to switch the robot to the default standing position, press **P** to switch to RL control mode, and press **1** in any state to switch to the initial lying position. WS controls x-axis, AD controls yaw, and JL controls y-axis.
+或者按下键盘上的**0**键让机器人切换到默认站起姿态，按下**P**键切换到RL控制模式，任意状态按下**1**键切换到最初的趴下姿态。WS控制x，AD控制yaw，JL控制y。
 
 #### Unitree Go2
 
-1. Connect one end of the Ethernet cable to the Go2 robot and the other end to the user's computer. Then, enable USB Ethernet on the computer and configure it. The IP address of the onboard computer on the Go2 robot is 192.168.123.161, so the computer's USB Ethernet address should be set to the same network segment as the robot. For example, enter 192.168.123.222 in the "Address" field ("222" can be replaced with another number).
-2. Use the `ifconfig` command to find the name of the network interface for the 123 network segment, such as `enxf8e43b808e06`. In the following steps, replace `<YOUR_NETWORK_INTERFACE>` with the actual network interface name.
-3. Open a new terminal and start the control program:
+1. 用网线的一端连接Go2机器人，另一端连接用户电脑，并开启电脑的 USB Ethernet 后进行配置。机器狗机载电脑的 IP 地地址为 192.168.123.161，故需将电脑 USB Ethernet 地址设置为与机器狗同一网段，如在 Address 中输入 192.168.123.222 (“222”可以改成其他)。
+2. 通过`ifconfig`命令查看123网段的网卡名字，如`enxf8e43b808e06`，下文用 \<YOUR_NETWORK_INTERFACE\> 代替
+3. 新建终端，启动控制程序
     ```bash
     source devel/setup.bash
     rosrun rl_sar rl_real_go2 <YOUR_NETWORK_INTERFACE>
     ```
-4. Go2 supports both joy and keyboard control, using the same method as mentioned above for A1.
+4. Go2支持手柄与键盘控制，方法与上面a1相同
 
-### Train the actuator network
+### 训练执行器网络
 
-Take A1 as an example below
+下面拿A1举例
 
-1. Uncomment `#define CSV_LOGGER` in the top of `rl_real_a1.cpp`. You can also modify the corresponding part in the simulation program to collect simulation data for testing the training process.
-2. Run the control program, and the program will log all data after execution.
-3. Stop the control program and start training the actuator network. Note that `rl_sar/src/rl_sar/models/` is omitted before the following paths.
+1. 取消注释`rl_real_a1.cpp`中最上面的`#define CSV_LOGGER`，你也可以在仿真程序中修改对应部分采集仿真数据用来测试训练过程。
+2. 运行控制程序，程序会在执行后记录所有数据。
+3. 停止控制程序，开始训练执行器网络。注意，下面的路径前均省略了`rl_sar/src/rl_sar/models/`。
     ```bash
     rosrun rl_sar actuator_net.py --mode train --data a1/motor.csv --output a1/motor.pt
     ```
-4. Verify the trained actuator network.
+4. 验证已经训练好的训练执行器网络。
     ```bash
     rosrun rl_sar actuator_net.py --mode play --data a1/motor.csv --output a1/motor.pt
     ```
 
-## Add Your Robot
+## 添加你的机器人
 
-In the following text, **\<ROBOT\>_\<PLATFORM\>** is used to represent your robot environment.
+下文中使用 **\<ROBOT\>_\<FRAMEWORK\>** 代替表示你的机器人环境
 
-1. Create a model package named `<ROBOT>_description` in the `rl_sar/src/robots` directory. Place the robot's URDF file in the `rl_sar/src/robots/<ROBOT>_description/urdf` directory and name it `<ROBOT>.urdf`. Additionally, create a joint configuration file with the namespace `<ROBOT>_gazebo` in the `rl_sar/src/robots/<ROBOT>_description/config` directory.
-2. Place the trained RL model files in the `rl_sar/src/rl_sar/models/<ROBOT>_<PLATFORM>` directory, and create a new `config.yaml` file in this path. Refer to the `rl_sar/src/rl_sar/models/a1_isaacgym/config.yaml` file to modify the parameters.
-3. Modify the `forward()` function in the code as needed to adapt to different models.
-4. If you need to run simulations, modify the launch files as needed by referring to those in the `rl_sar/src/rl_sar/launch` directory.
-5. If you need to run on the physical robot, modify the file `rl_sar/src/rl_sar/src/rl_real_a1.cpp` as needed.
+1. 在`rl_sar/src/robots`路径下创建名为`<ROBOT>_description`的模型包，将模型的urdf放到`rl_sar/src/robots/<ROBOT>_description/urdf`路径下并命名为`<ROBOT>.urdf`，并在`rl_sar/src/robots/<ROBOT>_description/config`路径下创建命名空间为`<ROBOT>_gazebo`的关节配置文件
+2. 将训练好的RL模型文件放到`rl_sar/src/rl_sar/models/<ROBOT>_<FRAMEWORK>`路径下，并在此路径中新建config.yaml文件，参考`rl_sar/src/rl_sar/models/a1_isaacgym/config.yaml`文件修改其中参数
+3. 按需修改代码中的`forward()`函数，以适配不同的模型
+4. 若需要运行仿真，则参考`rl_sar/src/rl_sar/launch`路径下的launch文件自行修改
+5. 若需要运行实物，则参考`rl_sar/src/rl_sar/src/rl_real_a1.cpp`文件自行修改
 
-## Contributing
-
-Wholeheartedly welcome contributions from the community to make this framework mature and useful for everyone. These may happen as bug reports, feature requests, or code contributions.
-
-[List of contributors](CONTRIBUTORS.md)
-
-## Citation
-
-Please cite the following if you use this code or parts of it:
-
-```
-@software{fan-ziqi2024rl_sar,
-  author = {fan-ziqi},
-  title = {{rl_sar: Simulation Verification and Physical Deployment of Robot Reinforcement Learning Algorithm.}},
-  url = {https://github.com/fan-ziqi/rl_sar},
-  year = {2024}
-}
-```
