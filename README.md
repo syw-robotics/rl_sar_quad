@@ -11,24 +11,20 @@
   - `cpp`: sim2sim & 实机部署
   - `python`: sim2sim
 
-状态：
-- 仅A1的example经过验证
-
-## 准备
+## Prerequisites
 
 ```bash
 git clone https://github.com/fan-ziqi/rl_sar.git
 ```
 
-## 依赖
-
-本项目使用`ros-noetic`(Ubuntu20.04)，且需要安装以下的ros依赖包
+## Dependencies
 
 ```bash
 sudo apt install ros-noetic-teleop-twist-keyboard ros-noetic-controller-interface ros-noetic-gazebo-ros-control ros-noetic-joint-state-controller ros-noetic-effort-controllers ros-noetic-joint-trajectory-controller
 ```
 
-在任意位置下载并部署`libtorch`
+- `libtorch`
+在任意位置下载并配置环境变量
 
 ```bash
 cd /path/to/your/torchlib
@@ -37,7 +33,8 @@ unzip libtorch-cxx11-abi-shared-with-deps-2.0.1+cpu.zip -d ./
 echo 'export Torch_DIR=/path/to/your/torchlib' >> ~/.bashrc
 ```
 
-安装`yaml-cpp`和`lcm`，若您使用Ubuntu，可以直接使用包管理器进行安装
+- `yaml-cpp` & `lcm`
+Ubuntu可直接apt install进行安装
 
 ```bash
 sudo apt install liblcm-dev libyaml-cpp-dev
@@ -45,7 +42,7 @@ sudo apt install liblcm-dev libyaml-cpp-dev
 
 <details>
 
-<summary>也可以使用源码安装，点击展开</summary>
+<summary>也可以使用源码安装</summary>
 
 安装yaml-cpp
 
@@ -68,22 +65,33 @@ sudo ldconfig
 ```
 </details>
 
-## 编译
+- `tbb`
+
+使用Intel TBB（Threading Building Blocks）库进行线程间数据交换
+
+Ubuntu可直接apt install安装
+
+```bash
+sudo apt install libtbb-dev
+```
+
+## Compilation
+
 
 在项目根目录编译
 
 ```bash
-cd ..
+cd <path_to_rl_sar_quad>
 catkin build
 ```
 
-如果 catkin build 报错: `Unable to find either executable 'empy' or Python module 'em'`, 在`catkin build` 之前执行 `catkin config -DPYTHON_EXECUTABLE=/usr/bin/python3`
+若 catkin build 报错: `Unable to find either executable 'empy' or Python module 'em'`, 在`catkin build` 之前执行 `catkin config -DPYTHON_EXECUTABLE=/usr/bin/python3`
 
-## 运行
+## Run
 
-下文中使用 **\<ROBOT\>_\<FRAMEWORK\>** 代替表示不同的环境，可以是 `a1_isaacgym` 、 `a1_isaacsim` 、 `go2_isaacgym` 、 `gr1t1_isaacgym` 、 `gr1t2_isaacgym`
+下文中使用 **\<ROBOT\>_\<FRAMEWORK\>** 代替表示不同的环境，如`a1_isaacgym` 、 `a1_isaacsim` 、 `go2_isaacgym`
 
-运行前请将训练好的pt模型文件拷贝到`rl_sar/src/rl_sar/models/<ROBOT>_<FRAMEWORK>`中，并配置`config.yaml`中的参数。
+运行前请将训练好的pt模型文件拷贝到`rl_sar/src/rl_sar/models/<ROBOT>_<FRAMEWORK>`中，并配置`config.yaml`中的参数
 
 ### 仿真
 
@@ -104,10 +112,10 @@ source devel/setup.bash
 
 控制：
 
-* 按 **\<Enter\>** 切换仿真器运行/停止。
-* **W** 和 **S** 控制x轴，**A** 和 **D** 控制yaw轴，**J** 和 **L** 控制y轴，按下空格重置控制指令。
-* 按 **\<Space\>** 将所有控制指令设置为零。
-* 如果机器人摔倒，按 **R** 重置Gazebo环境。
+* 按 **\<Enter\>** 切换仿真器运行/停止
+* **W** 和 **S** 控制x轴，**A** 和 **D** 控制yaw轴，**J** 和 **L** 控制y轴，按下空格重置控制指令
+* 按 **\<Space\>** 将所有控制指令设置为零
+* 如果机器人摔倒，按 **R** 重置Gazebo环境
 
 ### 真实机器人
 > 实机部署不依赖ROS
@@ -126,13 +134,13 @@ source devel/setup.bash
 rosrun rl_sar rl_real_a1
 ```
 
-按下遥控器的**R2**键让机器人切换到默认站起姿态，按下**R1**键切换到RL控制模式，任意状态按下**L2**切换到最初的趴下姿态。左摇杆上下控制x左右控制yaw，右摇杆左右控制y。
+按下遥控器的**R2**键让机器人切换到默认站起姿态，按下**R1**键切换到RL控制模式，任意状态按下**L2**切换到最初的趴下姿态。左摇杆上下控制x左右控制yaw，右摇杆左右控制y
 
-或者按下键盘上的**0**键让机器人切换到默认站起姿态，按下**P**键切换到RL控制模式，任意状态按下**1**键切换到最初的趴下姿态。WS控制x，AD控制yaw，JL控制y。
+或者按下键盘上的**0**键让机器人切换到默认站起姿态，按下**P**键切换到RL控制模式，任意状态按下**1**键切换到最初的趴下姿态。WS控制x，AD控制yaw，JL控制y
 
 #### Unitree Go2
 
-1. 用网线的一端连接Go2机器人，另一端连接用户电脑，并开启电脑的 USB Ethernet 后进行配置。机器狗机载电脑的 IP 地地址为 192.168.123.161，故需将电脑 USB Ethernet 地址设置为与机器狗同一网段，如在 Address 中输入 192.168.123.222 (“222”可以改成其他)。
+1. 用网线的一端连接Go2机器人，另一端连接用户电脑，并开启电脑的 USB Ethernet 后进行配置。机器狗机载电脑的 IP 地地址为 192.168.123.161，故需将电脑 USB Ethernet 地址设置为与机器狗同一网段，如在 Address 中输入 192.168.123.222 (“222”可以改成其他)
 2. 通过`ifconfig`命令查看123网段的网卡名字，如`enxf8e43b808e06`，下文用 \<YOUR_NETWORK_INTERFACE\> 代替
 3. 新建终端，启动控制程序
     ```bash
@@ -145,13 +153,13 @@ rosrun rl_sar rl_real_a1
 
 下面拿A1举例
 
-1. 取消注释`rl_real_a1.cpp`中最上面的`#define CSV_LOGGER`，你也可以在仿真程序中修改对应部分采集仿真数据用来测试训练过程。
-2. 运行控制程序，程序会在执行后记录所有数据。
-3. 停止控制程序，开始训练执行器网络。注意，下面的路径前均省略了`rl_sar/src/rl_sar/models/`。
+1. 取消注释`rl_real_a1.cpp`中最上面的`#define CSV_LOGGER`，你也可以在仿真程序中修改对应部分采集仿真数据用来测试训练过程
+2. 运行控制程序，程序会在执行后记录所有数据
+3. 停止控制程序，开始训练执行器网络。注意，下面的路径前均省略了`rl_sar/src/rl_sar/models/`
     ```bash
     rosrun rl_sar actuator_net.py --mode train --data a1/motor.csv --output a1/motor.pt
     ```
-4. 验证已经训练好的训练执行器网络。
+4. 验证已经训练好的训练执行器网络
     ```bash
     rosrun rl_sar actuator_net.py --mode play --data a1/motor.csv --output a1/motor.pt
     ```
